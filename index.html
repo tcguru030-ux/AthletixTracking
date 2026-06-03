@@ -25,32 +25,37 @@
 <script crossorigin src="https://cdn.jsdelivr.net/npm/prop-types@15/prop-types.min.js"></script>
 <!-- Recharts -->
 <script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2/umd/Recharts.min.js"></script>
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <script>
-// Zeige Fehler sichtbar statt still zu scheitern
 window.onerror = function(msg, src, line) {
   var b = document.getElementById('error-box');
   b.style.display = 'block';
   b.textContent = 'JS-Fehler: ' + msg + ' (Zeile ' + line + ')';
 };
-
-// Prüfe ob Libraries geladen sind
-window.addEventListener('DOMContentLoaded', function() {
-  var missing = [];
-  if (!window.React) missing.push('React');
-  if (!window.ReactDOM) missing.push('ReactDOM');
-  if (!window.Recharts) missing.push('Recharts');
-  if (missing.length) {
-    var b = document.getElementById('error-box');
-    b.style.display = 'block';
-    b.textContent = 'Bibliothek nicht geladen: ' + missing.join(', ') + '. Bitte Seite neu laden oder Netzwerk prüfen.';
-  }
-});
 </script>
 
 <script>
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+// $$  HIER MUSST DU ETWAS EINGEBEN — SCHRITT 1 von 2        $$
+// $$  Supabase → Settings → API → "Project URL"             $$
+// $$  Beispiel: 'https://abcdefgh.supabase.co'              $$
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+const SUPABASE_URL = 'https://mpztrebwmcuhlnqpskjl.supabase.co';
+
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+// $$  HIER MUSST DU ETWAS EINGEBEN — SCHRITT 2 von 2        $$
+// $$  Supabase → Settings → API → "anon" / "public" Key     $$
+// $$  Beispiel: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'  $$
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+const SUPABASE_KEY = 'sb_publishable_Q1DDKMUDdhHCNJfL3_kN4w_STJajACP';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const {
   useState,
+  useEffect,
   useMemo
 } = React;
 const {
@@ -73,705 +78,329 @@ const C = {
   inputBg: "rgba(255,255,255,0.07)"
 };
 const MOT = {
-  green: {
-    label: "Sehr motiviert",
-    color: "#22c55e"
-  },
-  yellow: {
-    label: "Durchschnittlich",
-    color: "#eab308"
-  },
-  red: {
-    label: "Wenig motiviert",
-    color: "#ef4444"
-  },
-  darkred: {
-    label: "Gar kein Bock",
-    color: "#7f1d1d"
-  }
+  green:   { label: "Sehr motiviert",    color: "#22c55e" },
+  yellow:  { label: "Durchschnittlich",  color: "#eab308" },
+  red:     { label: "Wenig motiviert",   color: "#ef4444" },
+  darkred: { label: "Gar kein Bock",     color: "#7f1d1d" },
 };
 const MOT_ORDER = ["green", "yellow", "red", "darkred"];
-const METRICS = [{
-  id: "squat",
-  name: "Kniebeuge",
-  unit: "kg",
-  higherBetter: true
-}, {
-  id: "bench",
-  name: "Bankdrücken",
-  unit: "kg",
-  higherBetter: true
-}, {
-  id: "sprint",
-  name: "Sprint 30m",
-  unit: "s",
-  higherBetter: false
-}, {
-  id: "cmj",
-  name: "Sprungkraft (CMJ)",
-  unit: "cm",
-  higherBetter: true
-}, {
-  id: "plank",
-  name: "Plank",
-  unit: "s",
-  higherBetter: true
-}];
-
-/* ---------- Helpers ---------- */
-function mulberry32(a) {
-  return function () {
-    a |= 0;
-    a = a + 0x6d2b79f5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+const METRICS = [
+  { id: "squat", name: "Kniebeuge",       unit: "kg", higherBetter: true  },
+  { id: "bench", name: "Bankdrücken",     unit: "kg", higherBetter: true  },
+  { id: "sprint",name: "Sprint 30m",      unit: "s",  higherBetter: false },
+  { id: "cmj",   name: "Sprungkraft (CMJ)",unit:"cm", higherBetter: true  },
+  { id: "plank", name: "Plank",           unit: "s",  higherBetter: true  },
+];
+const MONTH_LABELS = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 function buildMonths() {
   const out = [];
   const now = new Date(2026, 5, 1);
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    out.push({
-      key,
-      label: MONTH_LABELS[d.getMonth()],
-      full: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}`
-    });
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    out.push({ key, label: MONTH_LABELS[d.getMonth()], full: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}` });
   }
   return out;
 }
 const MONTHS = buildMonths();
 const CURRENT_MONTH = MONTHS[MONTHS.length - 1].key;
 
-/* ---------- Seed-Daten ---------- */
-const POSITIONS = ["Torwart", "Linksaußen", "Rückraum Links", "Rückraum Mitte", "Rückraum Rechts", "Rechtsaußen", "Kreisläufer"];
-const PLANS = ["Kraft Aufbau", "Athletik Basis", "Reha / Prävention", "Maximalkraft"];
-const NAMES = ["Lukas Berger", "Jonas Wagner", "Finn Hoffmann", "Tim Schäfer", "Max Becker", "Paul Richter", "Noah Wolf", "Leon Schulz", "Felix Neumann", "Erik Krüger", "Jan Hartmann", "David Köhler", "Niklas Braun", "Tobias Lang", "Marvin Frank", "Sven Albrecht", "Dennis Vogel", "Kevin Sommer", "Robin Busch", "Fabian Roth", "Julian Engel"];
-function seedPlayers() {
-  return NAMES.map((name, i) => {
-    const rnd = mulberry32(i * 7 + 13);
-    const position = POSITIONS[i % POSITIONS.length];
-    const age = 18 + Math.floor(rnd() * 16);
-    const plan = PLANS[Math.floor(rnd() * PLANS.length)];
+/* ---------- Supabase Daten-Helpers ---------- */
+async function loadPlayers() {
+  const { data: players, error: e1 } = await sb.from('players').select('*').order('name');
+  if (e1) throw e1;
+  const { data: measurements, error: e2 } = await sb.from('measurements').select('*');
+  if (e2) throw e2;
+  const { data: motivation, error: e3 } = await sb.from('motivation').select('*');
+  if (e3) throw e3;
+
+  return players.map(p => {
     const data = {};
     METRICS.forEach(m => {
-      let base, step;
-      if (m.id === "squat") {
-        base = 80 + rnd() * 50;
-        step = 1 + rnd() * 2.5;
-      } else if (m.id === "bench") {
-        base = 50 + rnd() * 40;
-        step = 0.5 + rnd() * 1.5;
-      } else if (m.id === "sprint") {
-        base = 4.2 + rnd() * 0.6;
-        step = -(0.01 + rnd() * 0.03);
-      } else if (m.id === "cmj") {
-        base = 30 + rnd() * 15;
-        step = 0.2 + rnd() * 0.6;
-      } else {
-        base = 60 + rnd() * 90;
-        step = 3 + rnd() * 6;
-      }
-      const series = [];
-      for (let mo = 6; mo < 12; mo++) {
-        const noise = (rnd() - 0.5) * step;
-        let val = base + step * (mo - 6) + noise;
-        val = m.id === "sprint" ? Math.round(val * 100) / 100 : Math.round(val);
-        series.push({
-          month: MONTHS[mo].key,
-          value: val
-        });
-      }
-      data[m.id] = series;
+      data[m.id] = measurements
+        .filter(r => r.player_id === p.id && r.metric_id === m.id)
+        .map(r => ({ month: r.month, value: r.value }))
+        .sort((a, b) => a.month.localeCompare(b.month));
     });
-    const motivation = {};
-    for (let mo = 6; mo < 12; mo++) {
-      const r = rnd();
-      const v = r < 0.45 ? "green" : r < 0.75 ? "yellow" : r < 0.92 ? "red" : "darkred";
-      motivation[MONTHS[mo].key] = v;
-    }
-    return {
-      id: i + 1,
-      name,
-      position,
-      email: name.toLowerCase().replace(/ /g, ".").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue") + "@hsv-team.de",
-      age,
-      plan,
-      data,
-      motivation
-    };
+    const motMap = {};
+    motivation.filter(r => r.player_id === p.id).forEach(r => { motMap[r.month] = r.value; });
+    return { ...p, data, motivation: motMap };
   });
+}
+
+async function savePlayer(player) {
+  const { error } = await sb.from('players').upsert({
+    id: player.id,
+    name: player.name,
+    position: player.position,
+    email: player.email,
+    age: player.age,
+    plan: player.plan,
+  });
+  if (error) throw error;
+}
+
+async function saveMeasurement(playerId, metricId, month, value) {
+  const { error } = await sb.from('measurements').upsert(
+    { player_id: playerId, metric_id: metricId, month, value },
+    { onConflict: 'player_id,metric_id,month' }
+  );
+  if (error) throw error;
+}
+
+async function saveMotivation(playerId, month, value) {
+  const { error } = await sb.from('motivation').upsert(
+    { player_id: playerId, month, value },
+    { onConflict: 'player_id,month' }
+  );
+  if (error) throw error;
 }
 
 /* ---------- UI Bausteine ---------- */
-function Card({
-  children,
-  style
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.cardBg,
-      border: `1px solid ${C.cardBorder}`,
-      borderRadius: 18,
-      padding: 18,
-      backdropFilter: "blur(6px)",
-      boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-      ...style
-    }
+function Card({ children, style }) {
+  return React.createElement("div", {
+    style: { background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 18, padding: 18, backdropFilter: "blur(6px)", boxShadow: "0 8px 30px rgba(0,0,0,0.25)", ...style }
   }, children);
 }
-function MotDot({
-  value,
-  size = 16
-}) {
+
+function MotDot({ value, size = 16 }) {
   const m = value ? MOT[value] : null;
-  return /*#__PURE__*/React.createElement("span", {
+  return React.createElement("span", {
     title: m ? m.label : "Keine Angabe",
-    style: {
-      width: size,
-      height: size,
-      borderRadius: "50%",
-      background: m ? m.color : "rgba(255,255,255,0.15)",
-      display: "inline-block",
-      boxShadow: m ? `0 0 8px ${m.color}` : "none",
-      border: m ? "none" : "1px dashed rgba(255,255,255,0.3)",
-      flexShrink: 0
-    }
+    style: { width: size, height: size, borderRadius: "50%", background: m ? m.color : "rgba(255,255,255,0.15)", display: "inline-block", boxShadow: m ? `0 0 8px ${m.color}` : "none", border: m ? "none" : "1px dashed rgba(255,255,255,0.3)", flexShrink: 0 }
   });
 }
+
 const fieldStyle = {
-  background: C.inputBg,
-  border: `1px solid ${C.cardBorder}`,
-  borderRadius: 10,
-  color: C.text,
-  padding: "10px 12px",
-  fontSize: 15,
-  width: "100%",
-  outline: "none",
-  fontFamily: "inherit"
+  background: C.inputBg, border: `1px solid ${C.cardBorder}`, borderRadius: 10,
+  color: C.text, padding: "10px 12px", fontSize: 15, width: "100%", outline: "none", fontFamily: "inherit",
 };
 
 /* ---------- Spielerliste ---------- */
-function PlayerList({
-  players,
-  onSelect
-}) {
+function PlayerList({ players, onSelect }) {
   const [q, setQ] = useState("");
-  const filtered = players.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.position.toLowerCase().includes(q.toLowerCase()));
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, /*#__PURE__*/React.createElement("h1", {
-    style: {
-      fontFamily: "'Saira Condensed', sans-serif",
-      fontSize: 30,
-      fontWeight: 700,
-      margin: 0,
-      letterSpacing: 0.5
-    }
-  }, "KADER"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      margin: "2px 0 0",
-      opacity: 0.7,
-      fontSize: 14
-    }
-  }, players.length, " Athleten \xB7 Stand ", MONTHS[MONTHS.length - 1].full)), /*#__PURE__*/React.createElement("input", {
-    placeholder: "Suche nach Name oder Position\u2026",
-    value: q,
-    onChange: e => setQ(e.target.value),
-    style: {
-      ...fieldStyle,
-      marginBottom: 16
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 10
-    }
-  }, filtered.map(p => /*#__PURE__*/React.createElement("button", {
-    key: p.id,
-    onClick: () => onSelect(p.id),
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      background: C.cardBg,
-      border: `1px solid ${C.cardBorder}`,
-      borderRadius: 14,
-      padding: "12px 14px",
-      color: C.text,
-      textAlign: "left",
-      cursor: "pointer",
-      fontFamily: "inherit"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 42,
-      height: 42,
-      borderRadius: "50%",
-      background: "rgba(72,207,253,0.15)",
-      border: `1px solid ${C.accent}`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "'Saira Condensed', sans-serif",
-      fontWeight: 700,
-      fontSize: 17,
-      color: C.accent,
-      flexShrink: 0
-    }
-  }, p.name.split(" ").map(n => n[0]).join("")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600,
-      fontSize: 16
-    }
-  }, p.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      opacity: 0.65,
-      fontSize: 13
-    }
-  }, p.position)), /*#__PURE__*/React.createElement(MotDot, {
-    value: p.motivation[CURRENT_MONTH]
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: C.accent,
-      fontSize: 20,
-      lineHeight: 1
-    }
-  }, "\u203A")))));
+  const filtered = players.filter(p =>
+    p.name.toLowerCase().includes(q.toLowerCase()) || p.position.toLowerCase().includes(q.toLowerCase()));
+  return React.createElement("div", null,
+    React.createElement("div", { style: { marginBottom: 18 } },
+      React.createElement("h1", { style: { fontFamily: "'Saira Condensed', sans-serif", fontSize: 30, fontWeight: 700, margin: 0, letterSpacing: 0.5 } }, "KADER"),
+      React.createElement("p", { style: { margin: "2px 0 0", opacity: 0.7, fontSize: 14 } }, `${players.length} Athleten · Stand ${MONTHS[MONTHS.length-1].full}`)
+    ),
+    React.createElement("input", { placeholder: "Suche nach Name oder Position…", value: q, onChange: e => setQ(e.target.value), style: { ...fieldStyle, marginBottom: 16 } }),
+    React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+      filtered.map(p => React.createElement("button", {
+        key: p.id, onClick: () => onSelect(p.id),
+        style: { display: "flex", alignItems: "center", gap: 14, background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: "12px 14px", color: C.text, textAlign: "left", cursor: "pointer", fontFamily: "inherit" }
+      },
+        React.createElement("div", { style: { width: 42, height: 42, borderRadius: "50%", background: "rgba(72,207,253,0.15)", border: `1px solid ${C.accent}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Saira Condensed', sans-serif", fontWeight: 700, fontSize: 17, color: C.accent, flexShrink: 0 } },
+          p.name.split(" ").map(n => n[0]).join("")
+        ),
+        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+          React.createElement("div", { style: { fontWeight: 600, fontSize: 16 } }, p.name),
+          React.createElement("div", { style: { opacity: 0.65, fontSize: 13 } }, p.position)
+        ),
+        React.createElement(MotDot, { value: p.motivation[CURRENT_MONTH] }),
+        React.createElement("span", { style: { color: C.accent, fontSize: 20, lineHeight: 1 } }, "›")
+      ))
+    )
+  );
 }
 
 /* ---------- Detailansicht ---------- */
-function PlayerDetail({
-  player,
-  onBack,
-  onUpdate
-}) {
+function PlayerDetail({ player, onBack, onUpdate }) {
   const [selMetric, setSelMetric] = useState(METRICS[0].id);
   const [editInfo, setEditInfo] = useState(false);
-  const [form, setForm] = useState({
-    ...player
-  });
+  const [form, setForm] = useState({ ...player });
   const [meMetric, setMeMetric] = useState(METRICS[0].id);
   const [meMonth, setMeMonth] = useState(CURRENT_MONTH);
   const [meValue, setMeValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const metric = METRICS.find(m => m.id === selMetric);
   const chartData = useMemo(() => {
     const series = player.data[selMetric] || [];
     const byMonth = {};
     series.forEach(s => byMonth[s.month] = s.value);
-    return MONTHS.filter(m => byMonth[m.key] != null).map(m => ({
-      label: m.label,
-      value: byMonth[m.key]
-    }));
+    return MONTHS.filter(m => byMonth[m.key] != null).map(m => ({ label: m.label, value: byMonth[m.key] }));
   }, [player, selMetric]);
-  function saveInfo() {
-    onUpdate({
-      ...player,
-      ...form,
-      age: Number(form.age)
-    });
-    setEditInfo(false);
+
+  async function saveInfo() {
+    setSaving(true);
+    try {
+      const updated = { ...player, ...form, age: Number(form.age) };
+      await savePlayer(updated);
+      onUpdate(updated);
+      setEditInfo(false);
+    } catch(e) { alert("Fehler: " + e.message); }
+    setSaving(false);
   }
-  function addMeasurement() {
+
+  async function addMeasurement() {
     if (meValue === "" || isNaN(Number(meValue))) return;
-    const series = [...(player.data[meMetric] || [])];
-    const idx = series.findIndex(s => s.month === meMonth);
-    const entry = {
-      month: meMonth,
-      value: Number(meValue)
-    };
-    if (idx >= 0) series[idx] = entry;else series.push(entry);
-    series.sort((a, b) => a.month.localeCompare(b.month));
-    onUpdate({
-      ...player,
-      data: {
-        ...player.data,
-        [meMetric]: series
-      }
-    });
-    setMeValue("");
-    setSelMetric(meMetric);
+    setSaving(true);
+    try {
+      await saveMeasurement(player.id, meMetric, meMonth, Number(meValue));
+      const series = [...(player.data[meMetric] || [])];
+      const idx = series.findIndex(s => s.month === meMonth);
+      const entry = { month: meMonth, value: Number(meValue) };
+      if (idx >= 0) series[idx] = entry; else series.push(entry);
+      series.sort((a, b) => a.month.localeCompare(b.month));
+      onUpdate({ ...player, data: { ...player.data, [meMetric]: series } });
+      setMeValue(""); setSelMetric(meMetric);
+    } catch(e) { alert("Fehler: " + e.message); }
+    setSaving(false);
   }
-  function setMotivation(monthKey, value) {
-    onUpdate({
-      ...player,
-      motivation: {
-        ...player.motivation,
-        [monthKey]: value
-      }
-    });
+
+  async function setMotivation(monthKey, value) {
+    try {
+      await saveMotivation(player.id, monthKey, value);
+      onUpdate({ ...player, motivation: { ...player.motivation, [monthKey]: value } });
+    } catch(e) { alert("Fehler: " + e.message); }
   }
+
   const last6 = MONTHS.slice(-6);
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    style: {
-      background: "none",
-      border: "none",
-      color: C.accent,
-      fontSize: 15,
-      cursor: "pointer",
-      padding: 0,
-      marginBottom: 16,
-      fontFamily: "inherit"
-    }
-  }, "\u2039 Zur\xFCck zum Kader"), /*#__PURE__*/React.createElement(Card, {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontFamily: "'Saira Condensed', sans-serif",
-      fontSize: 26,
-      margin: 0,
-      fontWeight: 700
-    }
-  }, player.name), /*#__PURE__*/React.createElement("button", {
-    onClick: () => editInfo ? saveInfo() : setEditInfo(true),
-    style: {
-      background: editInfo ? C.accent : "transparent",
-      color: editInfo ? "#060c27" : C.accent,
-      border: `1px solid ${C.accent}`,
-      borderRadius: 8,
-      padding: "5px 12px",
-      fontSize: 13,
-      cursor: "pointer",
-      fontFamily: "inherit",
-      fontWeight: 600
-    }
-  }, editInfo ? "Speichern" : "Bearbeiten")), editInfo ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 10
-    }
-  }, [["name", "Name", "text"], ["position", "Position", "text"], ["email", "E-Mail", "email"], ["age", "Alter", "number"], ["plan", "Trainingsplan", "text"]].map(([k, label, type]) => /*#__PURE__*/React.createElement("div", {
-    key: k
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 12,
-      opacity: 0.7
-    }
-  }, label), /*#__PURE__*/React.createElement("input", {
-    type: type,
-    value: form[k],
-    onChange: e => setForm({
-      ...form,
-      [k]: e.target.value
-    }),
-    style: fieldStyle
-  })))) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: "10px 14px"
-    }
-  }, /*#__PURE__*/React.createElement(Info, {
-    label: "Position",
-    value: player.position
-  }), /*#__PURE__*/React.createElement(Info, {
-    label: "Alter",
-    value: `${player.age} Jahre`
-  }), /*#__PURE__*/React.createElement(Info, {
-    label: "E-Mail",
-    value: player.email,
-    full: true
-  }), /*#__PURE__*/React.createElement(Info, {
-    label: "Trainingsplan",
-    value: player.plan,
-    accent: true,
-    full: true
-  }))), /*#__PURE__*/React.createElement(Card, {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement(SectionTitle, null, "Entwicklungs\xFCbersicht"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap",
-      marginBottom: 14
-    }
-  }, METRICS.map(m => /*#__PURE__*/React.createElement("button", {
-    key: m.id,
-    onClick: () => setSelMetric(m.id),
-    style: {
-      background: selMetric === m.id ? C.accent : "transparent",
-      color: selMetric === m.id ? "#060c27" : C.text,
-      border: `1px solid ${selMetric === m.id ? C.accent : C.cardBorder}`,
-      borderRadius: 20,
-      padding: "6px 12px",
-      fontSize: 13,
-      cursor: "pointer",
-      fontFamily: "inherit",
-      fontWeight: 600
-    }
-  }, m.name))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 220,
-      marginLeft: -10
-    }
-  }, /*#__PURE__*/React.createElement(ResponsiveContainer, {
-    width: "100%",
-    height: "100%"
-  }, /*#__PURE__*/React.createElement(LineChart, {
-    data: chartData,
-    margin: {
-      top: 10,
-      right: 10,
-      bottom: 0,
-      left: 0
-    }
-  }, /*#__PURE__*/React.createElement(CartesianGrid, {
-    stroke: "rgba(255,255,255,0.08)"
-  }), /*#__PURE__*/React.createElement(XAxis, {
-    dataKey: "label",
-    stroke: "rgba(255,255,255,0.6)",
-    tick: {
-      fontSize: 12
-    }
-  }), /*#__PURE__*/React.createElement(YAxis, {
-    stroke: "rgba(255,255,255,0.6)",
-    tick: {
-      fontSize: 12
-    },
-    width: 38,
-    domain: ["auto", "auto"]
-  }), /*#__PURE__*/React.createElement(Tooltip, {
-    contentStyle: {
-      background: "#060c27",
-      border: `1px solid ${C.accent}`,
-      borderRadius: 10,
-      color: "#fff"
-    },
-    formatter: v => [`${v} ${metric.unit}`, metric.name]
-  }), /*#__PURE__*/React.createElement(Line, {
-    type: "monotone",
-    dataKey: "value",
-    stroke: C.accent,
-    strokeWidth: 3,
-    dot: {
-      r: 4,
-      fill: C.accent
-    },
-    activeDot: {
-      r: 6
-    }
-  })))), /*#__PURE__*/React.createElement("p", {
-    style: {
-      textAlign: "center",
-      fontSize: 12,
-      opacity: 0.6,
-      margin: "6px 0 0"
-    }
-  }, metric.name, " in ", metric.unit, " \xB7 ", metric.higherBetter ? "höher = besser" : "niedriger = besser"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16,
-      paddingTop: 16,
-      borderTop: `1px solid ${C.cardBorder}`
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      fontWeight: 600,
-      margin: "0 0 8px",
-      color: C.accent
-    }
-  }, "Neuen Wert eintragen"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("select", {
-    value: meMetric,
-    onChange: e => setMeMetric(e.target.value),
-    style: fieldStyle
-  }, METRICS.map(m => /*#__PURE__*/React.createElement("option", {
-    key: m.id,
-    value: m.id
-  }, m.name))), /*#__PURE__*/React.createElement("select", {
-    value: meMonth,
-    onChange: e => setMeMonth(e.target.value),
-    style: fieldStyle
-  }, MONTHS.map(m => /*#__PURE__*/React.createElement("option", {
-    key: m.key,
-    value: m.key
-  }, m.full))), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    placeholder: "Wert",
-    value: meValue,
-    onChange: e => setMeValue(e.target.value),
-    style: fieldStyle
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: addMeasurement,
-    style: {
-      background: C.accent,
-      color: "#060c27",
-      border: "none",
-      borderRadius: 10,
-      fontWeight: 700,
-      cursor: "pointer",
-      fontFamily: "inherit",
-      fontSize: 15
-    }
-  }, "Speichern")))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SectionTitle, null, "Motivations-Dashboard"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 6,
-      marginBottom: 16
-    }
-  }, last6.map(m => /*#__PURE__*/React.createElement("div", {
-    key: m.key,
-    style: {
-      textAlign: "center",
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement(MotDot, {
-    value: player.motivation[m.key],
-    size: 26
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      opacity: 0.65,
-      marginTop: 5
-    }
-  }, m.label)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      paddingTop: 14,
-      borderTop: `1px solid ${C.cardBorder}`
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      fontWeight: 600,
-      margin: "0 0 8px",
-      color: C.accent
-    }
-  }, "Motivation ", MONTHS[MONTHS.length - 1].full, " eintragen"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 8
-    }
-  }, MOT_ORDER.map(key => {
-    const active = player.motivation[CURRENT_MONTH] === key;
-    return /*#__PURE__*/React.createElement("button", {
-      key: key,
-      onClick: () => setMotivation(CURRENT_MONTH, key),
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        background: active ? MOT[key].color : "rgba(255,255,255,0.05)",
-        border: `1px solid ${active ? MOT[key].color : C.cardBorder}`,
-        borderRadius: 10,
-        padding: "10px 12px",
-        cursor: "pointer",
-        color: C.text,
-        fontFamily: "inherit",
-        fontSize: 13,
-        fontWeight: 600
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 14,
-        height: 14,
-        borderRadius: "50%",
-        background: MOT[key].color,
-        flexShrink: 0
-      }
-    }), MOT[key].label);
-  })))));
+
+  return React.createElement("div", null,
+    React.createElement("button", { onClick: onBack, style: { background: "none", border: "none", color: C.accent, fontSize: 15, cursor: "pointer", padding: 0, marginBottom: 16, fontFamily: "inherit" } }, "‹ Zurück zum Kader"),
+
+    React.createElement(Card, { style: { marginBottom: 14 } },
+      React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 } },
+        React.createElement("h2", { style: { fontFamily: "'Saira Condensed', sans-serif", fontSize: 26, margin: 0, fontWeight: 700 } }, player.name),
+        React.createElement("button", {
+          onClick: () => editInfo ? saveInfo() : setEditInfo(true),
+          disabled: saving,
+          style: { background: editInfo ? C.accent : "transparent", color: editInfo ? "#060c27" : C.accent, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "5px 12px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }
+        }, saving ? "…" : editInfo ? "Speichern" : "Bearbeiten")
+      ),
+      editInfo
+        ? React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+            [["name","Name","text"],["position","Position","text"],["email","E-Mail","email"],["age","Alter","number"],["plan","Trainingsplan","text"]].map(([k, label, type]) =>
+              React.createElement("div", { key: k },
+                React.createElement("label", { style: { fontSize: 12, opacity: 0.7 } }, label),
+                React.createElement("input", { type, value: form[k], onChange: e => setForm({ ...form, [k]: e.target.value }), style: fieldStyle })
+              )
+            )
+          )
+        : React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" } },
+            React.createElement(Info, { label: "Position",      value: player.position }),
+            React.createElement(Info, { label: "Alter",         value: `${player.age} Jahre` }),
+            React.createElement(Info, { label: "E-Mail",        value: player.email, full: true }),
+            React.createElement(Info, { label: "Trainingsplan", value: player.plan, accent: true, full: true })
+          )
+    ),
+
+    React.createElement(Card, { style: { marginBottom: 14 } },
+      React.createElement(SectionTitle, null, "Entwicklungsübersicht"),
+      React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 } },
+        METRICS.map(m => React.createElement("button", {
+          key: m.id, onClick: () => setSelMetric(m.id),
+          style: { background: selMetric === m.id ? C.accent : "transparent", color: selMetric === m.id ? "#060c27" : C.text, border: `1px solid ${selMetric === m.id ? C.accent : C.cardBorder}`, borderRadius: 20, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }
+        }, m.name))
+      ),
+      React.createElement("div", { style: { height: 220, marginLeft: -10 } },
+        React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
+          React.createElement(LineChart, { data: chartData, margin: { top: 10, right: 10, bottom: 0, left: 0 } },
+            React.createElement(CartesianGrid, { stroke: "rgba(255,255,255,0.08)" }),
+            React.createElement(XAxis, { dataKey: "label", stroke: "rgba(255,255,255,0.6)", tick: { fontSize: 12 } }),
+            React.createElement(YAxis, { stroke: "rgba(255,255,255,0.6)", tick: { fontSize: 12 }, width: 38, domain: ["auto","auto"] }),
+            React.createElement(Tooltip, { contentStyle: { background: "#060c27", border: `1px solid ${C.accent}`, borderRadius: 10, color: "#fff" }, formatter: v => [`${v} ${metric.unit}`, metric.name] }),
+            React.createElement(Line, { type: "monotone", dataKey: "value", stroke: C.accent, strokeWidth: 3, dot: { r: 4, fill: C.accent }, activeDot: { r: 6 } })
+          )
+        )
+      ),
+      React.createElement("p", { style: { textAlign: "center", fontSize: 12, opacity: 0.6, margin: "6px 0 0" } },
+        `${metric.name} in ${metric.unit} · ${metric.higherBetter ? "höher = besser" : "niedriger = besser"}`
+      ),
+      React.createElement("div", { style: { marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.cardBorder}` } },
+        React.createElement("p", { style: { fontSize: 13, fontWeight: 600, margin: "0 0 8px", color: C.accent } }, "Neuen Wert eintragen"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
+          React.createElement("select", { value: meMetric, onChange: e => setMeMetric(e.target.value), style: fieldStyle },
+            METRICS.map(m => React.createElement("option", { key: m.id, value: m.id }, m.name))
+          ),
+          React.createElement("select", { value: meMonth, onChange: e => setMeMonth(e.target.value), style: fieldStyle },
+            MONTHS.map(m => React.createElement("option", { key: m.key, value: m.key }, m.full))
+          ),
+          React.createElement("input", { type: "number", placeholder: "Wert", value: meValue, onChange: e => setMeValue(e.target.value), style: fieldStyle }),
+          React.createElement("button", { onClick: addMeasurement, disabled: saving, style: { background: C.accent, color: "#060c27", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 15 } }, saving ? "…" : "Speichern")
+        )
+      )
+    ),
+
+    React.createElement(Card, null,
+      React.createElement(SectionTitle, null, "Motivations-Dashboard"),
+      React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 16 } },
+        last6.map(m => React.createElement("div", { key: m.key, style: { textAlign: "center", flex: 1 } },
+          React.createElement(MotDot, { value: player.motivation[m.key], size: 26 }),
+          React.createElement("div", { style: { fontSize: 11, opacity: 0.65, marginTop: 5 } }, m.label)
+        ))
+      ),
+      React.createElement("div", { style: { paddingTop: 14, borderTop: `1px solid ${C.cardBorder}` } },
+        React.createElement("p", { style: { fontSize: 13, fontWeight: 600, margin: "0 0 8px", color: C.accent } }, `Motivation ${MONTHS[MONTHS.length-1].full} eintragen`),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
+          MOT_ORDER.map(key => {
+            const active = player.motivation[CURRENT_MONTH] === key;
+            return React.createElement("button", {
+              key,
+              onClick: () => setMotivation(CURRENT_MONTH, key),
+              style: { display: "flex", alignItems: "center", gap: 8, background: active ? MOT[key].color : "rgba(255,255,255,0.05)", border: `1px solid ${active ? MOT[key].color : C.cardBorder}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", color: C.text, fontFamily: "inherit", fontSize: 13, fontWeight: 600 }
+            },
+              React.createElement("span", { style: { width: 14, height: 14, borderRadius: "50%", background: MOT[key].color, flexShrink: 0 } }),
+              MOT[key].label
+            );
+          })
+        )
+      )
+    )
+  );
 }
-function Info({
-  label,
-  value,
-  accent,
-  full
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      gridColumn: full ? "1 / -1" : "auto"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      opacity: 0.6,
-      textTransform: "uppercase",
-      letterSpacing: 0.5
-    }
-  }, label), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      fontWeight: 600,
-      color: accent ? C.accent : C.text
-    }
-  }, value));
+
+function Info({ label, value, accent, full }) {
+  return React.createElement("div", { style: { gridColumn: full ? "1 / -1" : "auto" } },
+    React.createElement("div", { style: { fontSize: 11, opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 } }, label),
+    React.createElement("div", { style: { fontSize: 15, fontWeight: 600, color: accent ? C.accent : C.text } }, value)
+  );
 }
-function SectionTitle({
-  children
-}) {
-  return /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: "'Saira Condensed', sans-serif",
-      fontSize: 19,
-      fontWeight: 700,
-      margin: "0 0 14px",
-      letterSpacing: 0.5
-    }
-  }, children);
+
+function SectionTitle({ children }) {
+  return React.createElement("h3", { style: { fontFamily: "'Saira Condensed', sans-serif", fontSize: 19, fontWeight: 700, margin: "0 0 14px", letterSpacing: 0.5 } }, children);
 }
 
 /* ---------- App ---------- */
 function App() {
-  const [players, setPlayers] = useState(seedPlayers);
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const selected = players.find(p => p.id === selectedId);
+
+  useEffect(() => {
+    loadPlayers()
+      .then(data => { setPlayers(data); setLoading(false); })
+      .catch(err => {
+        var b = document.getElementById('error-box');
+        b.style.display = 'block';
+        b.textContent = 'Supabase Fehler: ' + err.message + ' — Bitte URL und Key in Zeile 42/43 prüfen.';
+        setLoading(false);
+      });
+  }, []);
+
   function updatePlayer(updated) {
     setPlayers(prev => prev.map(p => p.id === updated.id ? updated : p));
   }
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.bg,
-      minHeight: "100vh",
-      color: C.text,
-      fontFamily: "'Saira', sans-serif",
-      padding: "20px 16px 60px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 480,
-      margin: "0 auto"
-    }
-  }, selected ? /*#__PURE__*/React.createElement(PlayerDetail, {
-    player: selected,
-    onBack: () => setSelectedId(null),
-    onUpdate: updatePlayer
-  }) : /*#__PURE__*/React.createElement(PlayerList, {
-    players: players,
-    onSelect: setSelectedId
-  })));
+
+  if (loading) return React.createElement("div", { style: { padding: 40, textAlign: "center", opacity: 0.6, fontFamily: "'Saira', sans-serif" } }, "Daten werden geladen…");
+
+  return React.createElement("div", {
+    style: { background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'Saira', sans-serif", padding: "20px 16px 60px" }
+  },
+    React.createElement("div", { style: { maxWidth: 480, margin: "0 auto" } },
+      selected
+        ? React.createElement(PlayerDetail, { player: selected, onBack: () => setSelectedId(null), onUpdate: updatePlayer })
+        : React.createElement(PlayerList, { players, onSelect: setSelectedId })
+    )
+  );
 }
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
 </script>
 </body>
 </html>
